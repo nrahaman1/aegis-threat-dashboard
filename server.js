@@ -441,6 +441,9 @@ const ALLOWED_RSS_DOMAINS = [
     'promedmail.org', 'feeds.fao.org', 'news.un.org', 'rss.app',
     'www.aphis.usda.gov', 'www.who.int', 'www.oie.int', 'www.woah.org',
     'alerts.weather.gov',
+    'www.gdacs.org', 'gdacs.org',
+    'www.thenewhumanitarian.org', 'thenewhumanitarian.org',
+    'feeds.bbci.co.uk',
 ];
 
 app.get('/api/rss-proxy', async (req, res) => {
