@@ -604,12 +604,17 @@ app.get('/api/wto-sps', async (req, res) => {
 // ============================================================
 
 const FOOD_SECURITY_FEEDS = [
-    // ── Verified working as of March 2026 ──
+    // ── Primary feeds ──
     { name: 'ReliefWeb Food Security', url: 'https://reliefweb.int/updates/rss.xml?search=food+security+agriculture+disease+crop+livestock+famine' },
     { name: 'ReliefWeb Outbreaks', url: 'https://reliefweb.int/updates/rss.xml?search=epidemic+outbreak+drought+flood+locust+avian+influenza' },
     { name: 'GDACS Disasters', url: 'https://www.gdacs.org/xml/rss.xml' },
     { name: 'The New Humanitarian', url: 'https://www.thenewhumanitarian.org/rss.xml' },
     { name: 'BBC Environment', url: 'https://feeds.bbci.co.uk/news/science_and_environment/rss.xml' },
+    // ── Cloud-friendly alternatives (work from datacenter IPs) ──
+    { name: 'UN News Climate', url: 'https://news.un.org/feed/subscribe/en/news/topic/climate-change/feed/rss.xml' },
+    { name: 'UN News Health', url: 'https://news.un.org/feed/subscribe/en/news/topic/health/feed/rss.xml' },
+    { name: 'WHO Disease Outbreaks', url: 'https://www.who.int/feeds/entity/don/en/rss.xml' },
+    { name: 'FAO News', url: 'https://www.fao.org/rss/home/en/' },
 ];
 
 app.get('/api/food-security-feeds', async (req, res) => {

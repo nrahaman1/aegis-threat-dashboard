@@ -14,12 +14,17 @@ let lastFetchTime = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes — refresh frequently for live data
 
 const FOOD_SECURITY_FEEDS = [
-    // ── Verified working as of March 2026 ──
+    // ── Primary feeds ──
     { url: 'https://reliefweb.int/updates/rss.xml?search=food+security+agriculture+disease+crop+livestock+famine', source: 'ReliefWeb', category: 'food_security' },
     { url: 'https://reliefweb.int/updates/rss.xml?search=epidemic+outbreak+drought+flood+locust+avian+influenza', source: 'ReliefWeb Outbreaks', category: 'disease_outbreak' },
     { url: 'https://www.gdacs.org/xml/rss.xml', source: 'GDACS', category: 'food_security' },
     { url: 'https://www.thenewhumanitarian.org/rss.xml', source: 'The New Humanitarian', category: 'food_crisis' },
     { url: 'https://feeds.bbci.co.uk/news/science_and_environment/rss.xml', source: 'BBC Environment', category: 'agriculture_news' },
+    // ── Cloud-friendly alternatives ──
+    { url: 'https://news.un.org/feed/subscribe/en/news/topic/climate-change/feed/rss.xml', source: 'UN News Climate', category: 'food_security' },
+    { url: 'https://news.un.org/feed/subscribe/en/news/topic/health/feed/rss.xml', source: 'UN News Health', category: 'disease_outbreak' },
+    { url: 'https://www.who.int/feeds/entity/don/en/rss.xml', source: 'WHO', category: 'disease_outbreak' },
+    { url: 'https://www.fao.org/rss/home/en/', source: 'FAO', category: 'food_security' },
 ];
 
 const DISEASE_KEYWORDS = [
@@ -72,10 +77,12 @@ export async function fetchFoodSecurityData() {
     const allAlerts = [];
 
     // Try aggregated proxy endpoint first (fetches all feeds server-side in one call)
+    let aggregatedFeedCount = 0;
     try {
-        const resp = await fetch('/api/food-security-feeds', { signal: AbortSignal.timeout(20000) });
+        const resp = await fetch('/api/food-security-feeds', { signal: AbortSignal.timeout(30000) });
         if (resp.ok) {
             const result = await resp.json();
+            aggregatedFeedCount = result.feeds?.length || 0;
             for (const feed of result.feeds) {
                 if (feed.xml) {
                     const { parseXML } = await import('../utils/rss-parser.js');
@@ -104,21 +111,22 @@ export async function fetchFoodSecurityData() {
                     console.log(`[Food Security] ${feed.name}: ${items.length} items parsed`);
                 }
             }
-            console.log(`[Food Security] Aggregated proxy returned ${allAlerts.length} items from ${result.feeds.length} feeds`);
+            console.log(`[Food Security] Aggregated proxy returned ${allAlerts.length} items from ${aggregatedFeedCount} feeds`);
         }
     } catch (err) {
         console.warn('[Food Security] Aggregated proxy failed, trying individual feeds:', err.message);
     }
 
-    // Fallback to individual RSS feeds via proxy
-    if (allAlerts.length === 0) {
+    // Fallback: if aggregated endpoint returned fewer feeds than expected, fetch missing ones individually via rss-proxy
+    if (aggregatedFeedCount < FOOD_SECURITY_FEEDS.length) {
+        console.log(`[Food Security] Only ${aggregatedFeedCount}/${FOOD_SECURITY_FEEDS.length} feeds from aggregator — fetching remaining via rss-proxy`);
         const feedResults = await Promise.allSettled(
             FOOD_SECURITY_FEEDS.map(feed =>
                 fetchRSS(feed.url).then(items => items.map(item => ({ ...item, feedSource: feed.source, feedCategory: feed.category })))
             )
         );
         for (const r of feedResults) {
-            if (r.status === 'fulfilled') {
+            if (r.status === 'fulfilled' && r.value.length > 0) {
                 allAlerts.push(...r.value);
             }
         }
