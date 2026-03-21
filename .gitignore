@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables (contains API keys)
+.env
+
+# Claude Code config
+.claude/
+
+# Logs
+*.log
+
+# Extracted reference projects
+hdx-scraper-wfp-hungermap-main/
+worldmonitor-main/
+hdx-scraper-wfp-hungermap-main.zip
+worldmonitor-main.zip
+
+# Cached data
+eping.json
+
+# Lock file (regenerated on npm install)
+package-lock.json
+
+# OS files
+.DS_Store
+Thumbs.db
