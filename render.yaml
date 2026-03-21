@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: aegis-threat-dashboard
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: AISSTREAM_API_KEY
+        sync: false
+      - key: WTO_EPING_API_KEY
+        sync: false
