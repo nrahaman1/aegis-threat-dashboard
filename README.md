@@ -1,6 +1,10 @@
 # AEGIS — Agriculture Early-warning Geospatial Intelligence System
 
+**[Live Dashboard](https://aegis-threat-dashboard.onrender.com/)**
+
 A real-time global intelligence dashboard for early detection of threats to United States agriculture. AEGIS monitors climate anomalies, trade barriers, disease outbreaks, food insecurity, and maritime shipping disruptions — fusing data from 10+ live sources into a unified operational picture.
+
+> **Note:** The live instance runs on Render's free tier. It may take ~30 seconds to wake up on first visit if the service has been idle.
 
 ## Features
 
