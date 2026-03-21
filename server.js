@@ -621,18 +621,31 @@ app.get('/api/food-security-feeds', async (req, res) => {
         const results = await Promise.allSettled(
             FOOD_SECURITY_FEEDS.map(async (feed) => {
                 try {
+                    console.log(`[Food Security] Fetching: ${feed.name} — ${feed.url}`);
                     const response = await fetch(feed.url, {
-                        headers: { 'User-Agent': 'AEGIS-AgriThreat-Monitor/1.0', 'Accept': 'application/rss+xml, application/xml, text/xml, */*' },
-                        signal: AbortSignal.timeout(12000),
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (compatible; AEGIS-AgriThreat-Monitor/1.0)',
+                            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+                        },
+                        signal: AbortSignal.timeout(25000),
                     });
-                    if (!response.ok) return { name: feed.name, error: response.status, xml: null };
-                    return { name: feed.name, xml: await response.text(), error: null };
-                } catch (err) { return { name: feed.name, error: err.message, xml: null }; }
+                    if (!response.ok) {
+                        console.warn(`[Food Security] ${feed.name} returned ${response.status}`);
+                        return { name: feed.name, error: response.status, xml: null };
+                    }
+                    const xml = await response.text();
+                    console.log(`[Food Security] ${feed.name} — OK (${xml.length} bytes)`);
+                    return { name: feed.name, xml, error: null };
+                } catch (err) {
+                    console.warn(`[Food Security] ${feed.name} failed: ${err.message}`);
+                    return { name: feed.name, error: err.message, xml: null };
+                }
             })
         );
 
         const feeds = results.filter(r => r.status === 'fulfilled').map(r => r.value).filter(f => f.xml);
         const failed = results.filter(r => r.status === 'fulfilled').map(r => r.value).filter(f => f.error);
+        console.log(`[Food Security] Succeeded: ${feeds.map(f => f.name).join(', ')} | Failed: ${failed.map(f => `${f.name}(${f.error})`).join(', ') || 'none'}`);
         const response = { feeds, failed, fetchedAt: new Date().toISOString() };
         setCache(cacheKey, response);
         res.set('X-Cache', 'MISS');
