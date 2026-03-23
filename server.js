@@ -538,39 +538,50 @@ app.get('/api/climate', async (req, res) => {
 
 app.get('/api/wfp-hungermap', async (req, res) => {
     const cacheKey = 'wfp:hungermap:json';
-    const cached = getCached(cacheKey, 6 * 60 * 60 * 1000); // 6 hour cache
+    const cached = getCached(cacheKey, 24 * 60 * 60 * 1000); // 24 hour cache — WFP data changes daily at most
     if (cached) {
         res.set('X-Cache', 'HIT');
         res.set('Content-Type', 'application/json');
         return res.send(cached);
     }
 
-    try {
-        const url = 'https://api.hungermapdata.org/v1/foodsecurity/country';
-        const response = await fetch(url, {
-            headers: { 'Accept': 'application/json' },
-            signal: AbortSignal.timeout(15000),
-        });
+    // Try multiple times with increasing timeouts (WFP API can be slow from cloud IPs)
+    const attempts = [
+        { timeout: 20000, headers: { 'Accept': 'application/json' } },
+        { timeout: 30000, headers: { 'Accept': 'application/json', 'User-Agent': 'AEGIS-Dashboard/2.0 (food-security-research)' } },
+    ];
 
-        if (response.ok) {
-            const data = await response.text();
-            try {
-                const parsed = JSON.parse(data);
-                const bodyObj = typeof parsed?.body === 'string' ? JSON.parse(parsed.body) : parsed?.body;
-                console.log(`[WFP HungerMap] Fetched ${bodyObj?.countries?.length || 0} countries from API`);
-            } catch { /* logging only */ }
-            setCache(cacheKey, data);
-            res.set('X-Cache', 'MISS');
-            res.set('Content-Type', 'application/json');
-            return res.send(data);
-        } else {
-            console.error(`[WFP HungerMap API] Error ${response.status}: ${await response.text()}`);
-            res.status(502).json({ error: 'HungerMap API returned an error', status: response.status });
+    for (let i = 0; i < attempts.length; i++) {
+        try {
+            const url = 'https://api.hungermapdata.org/v1/foodsecurity/country';
+            const response = await fetch(url, {
+                headers: attempts[i].headers,
+                signal: AbortSignal.timeout(attempts[i].timeout),
+            });
+
+            if (response.ok) {
+                const data = await response.text();
+                try {
+                    const parsed = JSON.parse(data);
+                    const bodyObj = typeof parsed?.body === 'string' ? JSON.parse(parsed.body) : parsed?.body;
+                    console.log(`[WFP HungerMap] Fetched ${bodyObj?.countries?.length || 0} countries from API (attempt ${i + 1})`);
+                } catch { /* logging only */ }
+                setCache(cacheKey, data);
+                res.set('X-Cache', 'MISS');
+                res.set('Content-Type', 'application/json');
+                return res.send(data);
+            } else {
+                console.warn(`[WFP HungerMap] Attempt ${i + 1} returned ${response.status}`);
+            }
+        } catch (err) {
+            console.warn(`[WFP HungerMap] Attempt ${i + 1} failed: ${err.message}`);
         }
-    } catch (err) {
-        console.error('[WFP Proxy] Fetch failed:', err.message);
-        res.status(502).json({ error: 'WFP HungerMap fetch failed', details: err.message });
     }
+
+    // If all attempts fail, return a minimal valid response so the client uses its own fallback data
+    console.error('[WFP HungerMap] All fetch attempts failed — returning empty shell for client fallback');
+    res.set('X-Cache', 'FALLBACK');
+    res.json({ statusCode: 200, body: { countries: [] } });
 });
 
 // ============================================================
