@@ -65,6 +65,9 @@ let aisConnected = false;
 let aisMessageCount = 0;
 let aisLastMessage = null;
 let aisReconnectTimer = null;
+let aisWatchdogTimer = null;
+const AIS_WATCHDOG_INTERVAL = 2 * 60 * 1000; // Check every 2 minutes
+const AIS_STALE_THRESHOLD = 5 * 60 * 1000;   // No messages for 5 min = stale
 
 // MMSI mid (Maritime Identification Digits) → country mapping
 // First 3 digits of MMSI identify the flag state
@@ -198,6 +201,7 @@ function connectAIS() {
     aisSocket.on('open', () => {
         console.log('[AIS] Connected to AISStream.io');
         aisConnected = true;
+        aisLastMessage = Date.now(); // Reset watchdog timer on fresh connect
 
         // Subscribe to vessel positions in US approach zones
         const subscribeMsg = JSON.stringify({
@@ -208,6 +212,7 @@ function connectAIS() {
 
         aisSocket.send(subscribeMsg);
         console.log(`[AIS] Subscribed to ${US_BOUNDING_BOXES.length} global shipping lane zones`);
+        startAISWatchdog();
     });
 
     aisSocket.on('message', (raw) => {
@@ -240,6 +245,22 @@ function scheduleReconnect() {
         aisReconnectTimer = null;
         connectAIS();
     }, delay);
+}
+
+// Watchdog: detect silent disconnections where no 'close' event fires
+function startAISWatchdog() {
+    if (aisWatchdogTimer) clearInterval(aisWatchdogTimer);
+    aisWatchdogTimer = setInterval(() => {
+        if (!aisConnected || !aisLastMessage) return;
+        const silentFor = Date.now() - aisLastMessage;
+        if (silentFor > AIS_STALE_THRESHOLD) {
+            console.warn(`[AIS] Watchdog: No messages for ${Math.round(silentFor / 1000)}s — forcing reconnect`);
+            aisConnected = false;
+            try { aisSocket?.terminate?.() || aisSocket?.close?.(); } catch {}
+            aisSocket = null;
+            scheduleReconnect();
+        }
+    }, AIS_WATCHDOG_INTERVAL);
 }
 
 function processAISMessage(msg) {
