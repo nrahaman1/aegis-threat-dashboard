@@ -201,7 +201,7 @@ function connectAIS() {
     aisSocket.on('open', () => {
         console.log('[AIS] Connected to AISStream.io');
         aisConnected = true;
-        aisLastMessage = Date.now(); // Reset watchdog timer on fresh connect
+        aisLastMessage = null; // Will be set on first message — watchdog catches if no messages arrive
 
         // Subscribe to vessel positions in US approach zones
         const subscribeMsg = JSON.stringify({
@@ -212,7 +212,6 @@ function connectAIS() {
 
         aisSocket.send(subscribeMsg);
         console.log(`[AIS] Subscribed to ${US_BOUNDING_BOXES.length} global shipping lane zones`);
-        startAISWatchdog();
     });
 
     aisSocket.on('message', (raw) => {
@@ -238,8 +237,12 @@ function connectAIS() {
 }
 
 function scheduleReconnect() {
-    if (aisReconnectTimer) return;
-    const delay = 10000; // 10s reconnect delay
+    // Clear any existing timer to avoid stale timers from process wake
+    if (aisReconnectTimer) {
+        clearTimeout(aisReconnectTimer);
+        aisReconnectTimer = null;
+    }
+    const delay = 5000; // 5s reconnect delay
     console.log(`[AIS] Reconnecting in ${delay / 1000}s...`);
     aisReconnectTimer = setTimeout(() => {
         aisReconnectTimer = null;
@@ -247,20 +250,48 @@ function scheduleReconnect() {
     }, delay);
 }
 
-// Watchdog: detect silent disconnections where no 'close' event fires
+function forceReconnect(reason) {
+    console.warn(`[AIS] Force reconnect: ${reason}`);
+    aisConnected = false;
+    try { aisSocket?.terminate?.(); } catch {}
+    try { aisSocket?.close?.(); } catch {}
+    aisSocket = null;
+    scheduleReconnect();
+}
+
+// Watchdog: detect silent disconnections AND stale connections
 function startAISWatchdog() {
     if (aisWatchdogTimer) clearInterval(aisWatchdogTimer);
     aisWatchdogTimer = setInterval(() => {
-        if (!aisConnected || !aisLastMessage) return;
-        const silentFor = Date.now() - aisLastMessage;
-        if (silentFor > AIS_STALE_THRESHOLD) {
-            console.warn(`[AIS] Watchdog: No messages for ${Math.round(silentFor / 1000)}s — forcing reconnect`);
-            aisConnected = false;
-            try { aisSocket?.terminate?.() || aisSocket?.close?.(); } catch {}
-            aisSocket = null;
+        // If not connected and no reconnect pending, force one
+        if (!aisConnected && !aisReconnectTimer) {
+            console.warn('[AIS] Watchdog: Not connected and no reconnect scheduled — triggering reconnect');
             scheduleReconnect();
+            return;
+        }
+        // If connected but no messages flowing, connection is silently dead
+        if (aisConnected && aisLastMessage) {
+            const silentFor = Date.now() - aisLastMessage;
+            if (silentFor > AIS_STALE_THRESHOLD) {
+                forceReconnect(`No messages for ${Math.round(silentFor / 1000)}s`);
+            }
+        }
+        // If connected but never received a message after 30s, subscription failed
+        if (aisConnected && !aisLastMessage) {
+            forceReconnect('Connected but never received messages');
         }
     }, AIS_WATCHDOG_INTERVAL);
+}
+
+// Send WebSocket ping every 30s to keep connection alive through load balancers/proxies
+function startAISPing() {
+    setInterval(() => {
+        if (aisSocket && aisConnected && aisSocket.readyState === WebSocket.OPEN) {
+            try {
+                aisSocket.ping();
+            } catch {}
+        }
+    }, 30000);
 }
 
 function processAISMessage(msg) {
@@ -731,9 +762,11 @@ app.listen(PORT, () => {
     console.log(`[AEGIS] Proxy + AIS Relay running on http://localhost:${PORT}`);
     console.log(`[AEGIS] AISStream API key: ${AISSTREAM_API_KEY ? '✓ configured' : '✗ not set'}`);
 
-    // Connect to AISStream
+    // Connect to AISStream + start watchdog & keepalive ping
     if (AISSTREAM_API_KEY) {
         connectAIS();
+        startAISWatchdog();
+        startAISPing();
     }
 
     // Periodic vessel pruning
