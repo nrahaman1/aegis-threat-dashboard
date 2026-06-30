@@ -638,6 +638,8 @@ window.__aegisExpandAlert = function (idx) {
 };
 
 window.__aegisFlyTo = function (lat, lon) {
+    // On mobile/tablet the drawer covers the map — close it so the point is visible
+    if (isDrawerMode()) setSidebarOpen(false);
     state.map?.flyTo({ center: [lon, lat], zoom: 5, duration: 1200 });
 };
 
@@ -732,14 +734,48 @@ function setupBasemapSelector() {
     }
 }
 
+// True when the layout is in drawer mode (tablet/mobile)
+function isDrawerMode() {
+    return window.matchMedia('(max-width: 1024px)').matches;
+}
+
+// Open/close the side panel and keep map + scrim in sync
+function setSidebarOpen(open) {
+    const sidebar = document.getElementById('sidebar');
+    const fab = document.getElementById('panel-fab');
+    if (!sidebar) return;
+    sidebar.classList.toggle('open', open);
+    document.body.classList.toggle('sidebar-open', open);
+    if (fab) fab.setAttribute('aria-expanded', String(open));
+    // Map width changes when the drawer overlays/reveals the map — repaint it
+    setTimeout(() => state.map?.resize(), 220);
+}
+
 function setupSidebarToggle() {
     const sidebar = document.getElementById('sidebar');
-    const toggle = document.getElementById('sidebar-toggle');
-    if (toggle && sidebar) {
-        toggle.addEventListener('click', () => {
-            sidebar.classList.toggle('open');
-        });
-    }
+    const edgeTab = document.getElementById('sidebar-toggle');
+    const fab = document.getElementById('panel-fab');
+    const backdrop = document.getElementById('sidebar-backdrop');
+
+    const toggle = () => setSidebarOpen(!sidebar.classList.contains('open'));
+
+    if (edgeTab) edgeTab.addEventListener('click', toggle);
+    if (fab) fab.addEventListener('click', toggle);
+    if (backdrop) backdrop.addEventListener('click', () => setSidebarOpen(false));
+
+    // Start collapsed on small screens so the map is the primary view
+    if (isDrawerMode()) setSidebarOpen(false);
+    else document.body.classList.toggle('sidebar-open', sidebar.classList.contains('open'));
+
+    // Re-sync when crossing the breakpoint (rotate / resize)
+    let wasDrawer = isDrawerMode();
+    window.addEventListener('resize', () => {
+        const nowDrawer = isDrawerMode();
+        if (nowDrawer === wasDrawer) return;
+        wasDrawer = nowDrawer;
+        if (nowDrawer) setSidebarOpen(false);     // entering mobile/tablet → collapse
+        else setSidebarOpen(true);                // back to desktop → restore panel
+    });
 }
 
 // ========================================================================
@@ -827,18 +863,27 @@ async function triggerRadarRefresh() {
 async function init() {
     console.log('[AEGIS] Initializing US Agriculture Early Warning System...');
 
-    const map = initMap();
+    // Wire UI first — the panel, layer toggles, basemap selector, and the responsive
+    // drawer must stay usable even if the basemap is slow, blocked, or fails to init.
+    // These handlers only act on state.map on user interaction (via optional chaining).
+    setupLayerToggles();
+    setupSidebarToggle();
+    setupBasemapSelector();
+    updateClock();
+
+    let map;
+    try {
+        map = initMap();
+    } catch (err) {
+        console.error('[AEGIS] Map failed to initialize — panel remains usable:', err);
+        return;
+    }
+
     map.on('load', async () => {
         console.log('[AEGIS] Map loaded');
 
         // Init deck.gl as MapLibre overlay (worldmonitor pattern)
         initDeckOverlay();
-
-        // Setup UI
-        setupLayerToggles();
-        setupSidebarToggle();
-        setupBasemapSelector();
-        updateClock();
 
         // Load data
         await loadAllData();

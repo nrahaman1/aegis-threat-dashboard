@@ -393,6 +393,58 @@ body {
   transform: rotate(180deg);
 }
 
+/* Floating panel toggle (mobile/tablet only) */
+.panel-fab {
+  display: none;
+  position: fixed;
+  top: calc(var(--topbar-height) + 12px);
+  right: 12px;
+  width: 46px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--border-glow);
+  border-radius: 50%;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  z-index: 1200;
+  box-shadow: var(--shadow-lg), 0 0 16px rgba(0, 240, 255, 0.12);
+  transition: background 0.2s, transform 0.2s;
+}
+
+.panel-fab:active {
+  transform: scale(0.92);
+}
+
+.panel-fab .panel-fab-close {
+  display: none;
+}
+
+body.sidebar-open .panel-fab .panel-fab-open {
+  display: none;
+}
+
+body.sidebar-open .panel-fab .panel-fab-close {
+  display: block;
+}
+
+/* Scrim behind the drawer on small screens */
+.sidebar-backdrop {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 6, 12, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s var(--ease-out);
+  z-index: 90;
+}
+
 /* Sidebar Sections */
 .sidebar-section {
   padding: 16px;
@@ -1097,25 +1149,173 @@ body {
 }
 
 /* ============================================
-   Responsive
+   Responsive — Tablet & Mobile
    ============================================ */
-@media (max-width: 768px) {
+
+/* ---- Tablet and below (<=1024px): sidebar becomes an overlay drawer ---- */
+@media (max-width: 1024px) {
   :root {
-    --sidebar-width: 100%;
+    --sidebar-width: 360px;
   }
 
+  /* Drawer slides over the map instead of taking flex space */
   .sidebar {
     position: absolute;
-    right: 0;
     top: 0;
+    right: 0;
+    height: 100%;
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* The desktop edge tab is replaced by the floating FAB */
+  .sidebar-toggle {
+    display: none;
+  }
+
+  .panel-fab {
+    display: flex;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+  }
+
+  body.sidebar-open .sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Radar no longer needs the sidebar offset — center it on the map */
+  .radar-overlay {
+    left: 50%;
+    width: 320px;
+    height: 320px;
+  }
+}
+
+/* ---- Mobile (<=640px): full-width drawer + compact chrome ---- */
+@media (max-width: 640px) {
+  :root {
+    --sidebar-width: 100%;
+    --topbar-height: 48px;
+    --ticker-height: 32px;
+  }
+
+  #top-bar {
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .top-bar-left,
+  .top-bar-right {
+    gap: 10px;
   }
 
   .logo-subtitle {
     display: none;
   }
 
+  .logo-name {
+    font-size: 16px;
+    letter-spacing: 2px;
+  }
+
+  /* Keep the AG Risk Index visible but compact (it's the headline metric) */
   .top-bar-center {
+    position: static;
+    flex: 0 0 auto;
+  }
+
+  .threat-badge {
+    padding: 4px 10px;
+    gap: 5px;
+  }
+
+  .threat-label {
     display: none;
+  }
+
+  .threat-score {
+    font-size: 14px;
+  }
+
+  /* Reclaim space: drop clock + status text, keep the status dot */
+  .clock {
+    display: none;
+  }
+
+  .data-status .status-text {
+    display: none;
+  }
+
+  .basemap-selector select {
+    padding: 5px 24px 5px 8px;
+    font-size: 11px;
+  }
+
+  /* The FAB clears the (now shorter) top bar */
+  .panel-fab {
+    top: calc(var(--topbar-height) + 10px);
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Bigger touch targets in the drawer */
+  .layer-toggle {
+    padding: 12px 10px;
+  }
+
+  .sidebar-section {
+    padding: 14px;
+  }
+
+  /* Detail popup spans the width with safe margins */
+  .detail-popup {
+    top: 10px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: 60vh;
+  }
+
+  /* Smaller, fainter radar so it doesn't dominate a small map */
+  .radar-overlay {
+    width: 240px;
+    height: 240px;
+    opacity: 0.22;
+  }
+
+  /* Tooltips can be wider relative to the small viewport */
+  .map-tooltip {
+    max-width: 76vw;
+  }
+
+  .ticker-label {
+    padding: 0 10px;
+    font-size: 9px;
+  }
+
+  .ticker-content {
+    font-size: 11px;
+  }
+}
+
+/* ---- Very small / narrow phones ---- */
+@media (max-width: 380px) {
+  .logo-name {
+    font-size: 15px;
+  }
+
+  .basemap-selector select {
+    max-width: 92px;
+  }
+}
+
+/* ---- Short landscape screens: shrink the radar so it never overflows ---- */
+@media (max-height: 520px) {
+  .radar-overlay {
+    width: 200px;
+    height: 200px;
   }
 }
 
