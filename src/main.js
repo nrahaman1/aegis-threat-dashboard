@@ -734,6 +734,47 @@ function setupBasemapSelector() {
     }
 }
 
+// Cross-browser fullscreen helpers (Chrome/Firefox use the standard API; older
+// WebKit/Safari need the webkit-prefixed variants — common on kiosk tablets).
+function fullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+function requestAppFullscreen() {
+    const el = document.documentElement;
+    const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (fn) fn.call(el).catch((err) => console.warn('[AEGIS] Fullscreen request failed:', err?.message));
+}
+
+function exitAppFullscreen() {
+    const fn = document.exitFullscreen || document.webkitExitFullscreen;
+    if (fn) fn.call(document);
+}
+
+function setupFullscreen() {
+    const btn = document.getElementById('fullscreen-btn');
+    if (!btn) return;
+
+    // Hide the control if the browser has no Fullscreen API (e.g. iOS Safari)
+    const supported = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+    if (!supported) { btn.style.display = 'none'; return; }
+
+    btn.addEventListener('click', () => {
+        if (fullscreenElement()) exitAppFullscreen();
+        else requestAppFullscreen();
+    });
+
+    // Keep the icon/state in sync however fullscreen changes (button, Esc, F11)
+    const onChange = () => {
+        const active = !!fullscreenElement();
+        document.body.classList.toggle('is-fullscreen', active);
+        btn.setAttribute('aria-pressed', String(active));
+        setTimeout(() => state.map?.resize(), 120);
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+}
+
 // True when the layout is in drawer mode (tablet/mobile)
 function isDrawerMode() {
     return window.matchMedia('(max-width: 1024px)').matches;
@@ -869,6 +910,7 @@ async function init() {
     setupLayerToggles();
     setupSidebarToggle();
     setupBasemapSelector();
+    setupFullscreen();
     updateClock();
 
     let map;

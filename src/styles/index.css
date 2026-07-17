@@ -148,6 +148,47 @@ body {
   justify-content: flex-end;
 }
 
+/* Icon buttons (fullscreen, etc.) */
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.icon-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.icon-btn:focus-visible {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.15);
+}
+
+/* Swap fullscreen enter/exit glyphs based on state */
+.icon-btn .icon-fs-exit {
+  display: none;
+}
+
+body.is-fullscreen .icon-btn .icon-fs-enter {
+  display: none;
+}
+
+body.is-fullscreen .icon-btn .icon-fs-exit {
+  display: block;
+}
+
 /* Basemap Selector */
 .basemap-selector select {
   appearance: none;
@@ -1148,6 +1189,22 @@ body.sidebar-open .panel-fab .panel-fab-close {
   opacity: 0.7;
 }
 
+/* Radar base geometry — defined before the responsive section so the
+   tablet/mobile/short-landscape radar overrides below win in the cascade. */
+.radar-overlay {
+  position: absolute;
+  top: 50%;
+  left: calc(50% - 160px);
+  /* desktop: offset left of the persistent sidebar */
+  transform: translate(-50%, -50%);
+  width: 400px;
+  height: 400px;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0.35;
+  transition: opacity 0.8s ease;
+}
+
 /* ============================================
    Responsive — Tablet & Mobile
    ============================================ */
@@ -1311,6 +1368,38 @@ body.sidebar-open .panel-fab .panel-fab-close {
   }
 }
 
+/* ---- 7" landscape tablets (e.g. 1024x600 IPS kiosk): reclaim vertical space,
+   size the radar to the short viewport, and compact the drawer so the layer
+   list, risk cards, and alert feed all fit the ~520px content height. ---- */
+@media (orientation: landscape) and (max-height: 720px) {
+  :root {
+    --topbar-height: 46px;
+    --ticker-height: 30px;
+  }
+
+  .radar-overlay {
+    width: 240px;
+    height: 240px;
+    opacity: 0.28;
+  }
+
+  .sidebar-section {
+    padding: 12px 14px;
+  }
+
+  .layer-toggle {
+    padding: 8px 10px;
+  }
+
+  .threat-card {
+    padding: 10px;
+  }
+
+  .section-title {
+    margin-bottom: 8px;
+  }
+}
+
 /* ---- Short landscape screens: shrink the radar so it never overflows ---- */
 @media (max-height: 520px) {
   .radar-overlay {
@@ -1321,21 +1410,8 @@ body.sidebar-open .panel-fab .panel-fab-close {
 
 /* ============================================
    Surveillance Radar Sweep Overlay
+   (base geometry is defined above the responsive section)
    ============================================ */
-
-.radar-overlay {
-  position: absolute;
-  top: 50%;
-  left: calc(50% - 160px);
-  /* offset for sidebar */
-  transform: translate(-50%, -50%);
-  width: 400px;
-  height: 400px;
-  pointer-events: none;
-  z-index: 5;
-  opacity: 0.35;
-  transition: opacity 0.8s ease;
-}
 
 .radar-overlay:hover {
   opacity: 0.15;
