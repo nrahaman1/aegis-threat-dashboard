@@ -14,6 +14,7 @@ import cors from 'cors';
 import WebSocket from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -567,6 +568,58 @@ app.get('/api/climate', async (req, res) => {
 // WFP HungerMap LIVE Proxy (api.hungermapdata.org)
 // ============================================================
 
+// Last-good snapshot persisted to disk so a WFP outage (the API periodically
+// hangs without responding) degrades to yesterday's real data instead of the
+// client's 16-country static fallback.
+const WFP_CACHE_FILE = join(__dirname, 'data', 'wfp-hungermap.json');
+
+function loadWFPFromDisk() {
+    try {
+        if (!existsSync(WFP_CACHE_FILE)) return null;
+        return JSON.parse(readFileSync(WFP_CACHE_FILE, 'utf8')); // { timestamp, raw }
+    } catch (err) {
+        console.warn('[WFP HungerMap] Disk cache read failed:', err.message);
+        return null;
+    }
+}
+
+function saveWFPToDisk(raw) {
+    try {
+        mkdirSync(dirname(WFP_CACHE_FILE), { recursive: true });
+        writeFileSync(WFP_CACHE_FILE, JSON.stringify({ timestamp: Date.now(), raw }));
+    } catch (err) {
+        console.warn('[WFP HungerMap] Disk cache write failed:', err.message);
+    }
+}
+
+// Warm the in-memory cache from disk at startup (kept if less than 24h old)
+{
+    const disk = loadWFPFromDisk();
+    if (disk?.raw && Date.now() - disk.timestamp < 24 * 60 * 60 * 1000) {
+        cache.set('wfp:hungermap:json', { data: disk.raw, timestamp: disk.timestamp });
+        console.log(`[WFP HungerMap] Warmed cache from disk (age: ${Math.round((Date.now() - disk.timestamp) / 60000)}m)`);
+    }
+}
+
+// After a total fetch failure, skip re-fetching for a while so page loads during
+// an outage return stale data instantly instead of hanging on dead sockets.
+let wfpFailedAt = 0;
+const WFP_FAILURE_MEMO_MS = 5 * 60 * 1000;
+
+function serveWFPStaleOrShell(res) {
+    const disk = loadWFPFromDisk();
+    if (disk?.raw) {
+        const ageMin = Math.round((Date.now() - disk.timestamp) / 60000);
+        console.warn(`[WFP HungerMap] Serving stale disk snapshot (age: ${ageMin}m)`);
+        res.set('X-Cache', 'STALE');
+        res.set('Content-Type', 'application/json');
+        return res.send(disk.raw);
+    }
+    console.error('[WFP HungerMap] No snapshot available — returning empty shell for client fallback');
+    res.set('X-Cache', 'FALLBACK');
+    res.json({ statusCode: 200, body: { countries: [] } });
+}
+
 app.get('/api/wfp-hungermap', async (req, res) => {
     const cacheKey = 'wfp:hungermap:json';
     const cached = getCached(cacheKey, 24 * 60 * 60 * 1000); // 24 hour cache — WFP data changes daily at most
@@ -576,10 +629,15 @@ app.get('/api/wfp-hungermap', async (req, res) => {
         return res.send(cached);
     }
 
+    // Known outage in progress — don't stall this request on dead sockets
+    if (Date.now() - wfpFailedAt < WFP_FAILURE_MEMO_MS) {
+        return serveWFPStaleOrShell(res);
+    }
+
     // Try multiple times with increasing timeouts (WFP API can be slow from cloud IPs)
     const attempts = [
-        { timeout: 20000, headers: { 'Accept': 'application/json' } },
-        { timeout: 30000, headers: { 'Accept': 'application/json', 'User-Agent': 'AEGIS-Dashboard/2.0 (food-security-research)' } },
+        { timeout: 10000, headers: { 'Accept': 'application/json' } },
+        { timeout: 15000, headers: { 'Accept': 'application/json', 'User-Agent': 'AEGIS-Dashboard/2.0 (food-security-research)' } },
     ];
 
     for (let i = 0; i < attempts.length; i++) {
@@ -598,6 +656,8 @@ app.get('/api/wfp-hungermap', async (req, res) => {
                     console.log(`[WFP HungerMap] Fetched ${bodyObj?.countries?.length || 0} countries from API (attempt ${i + 1})`);
                 } catch { /* logging only */ }
                 setCache(cacheKey, data);
+                saveWFPToDisk(data);
+                wfpFailedAt = 0;
                 res.set('X-Cache', 'MISS');
                 res.set('Content-Type', 'application/json');
                 return res.send(data);
@@ -609,10 +669,9 @@ app.get('/api/wfp-hungermap', async (req, res) => {
         }
     }
 
-    // If all attempts fail, return a minimal valid response so the client uses its own fallback data
-    console.error('[WFP HungerMap] All fetch attempts failed — returning empty shell for client fallback');
-    res.set('X-Cache', 'FALLBACK');
-    res.json({ statusCode: 200, body: { countries: [] } });
+    // All attempts failed — remember the outage, then serve the last-good snapshot if we have one
+    wfpFailedAt = Date.now();
+    serveWFPStaleOrShell(res);
 });
 
 // ============================================================

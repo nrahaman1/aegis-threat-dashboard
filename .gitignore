@@ -13,6 +13,9 @@ dist/
 # Logs
 *.log
 
+# Cached data snapshots (written at runtime)
+data/
+
 # Extracted reference projects
 hdx-scraper-wfp-hungermap-main/
 worldmonitor-main/
