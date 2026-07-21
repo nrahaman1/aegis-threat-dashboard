@@ -477,13 +477,52 @@ body.sidebar-open .panel-fab .panel-fab-close {
   display: none;
   position: absolute;
   inset: 0;
-  background: rgba(3, 6, 12, 0.55);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  background: rgba(3, 6, 12, 0.4);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s var(--ease-out);
   z-index: 90;
+}
+
+/* Immersive (pseudo-fullscreen) mode — used where the Fullscreen API is
+   unavailable (e.g. iPhone Safari). Hides the top bar + ticker to maximize
+   the map, and shows a dedicated exit button since the top bar is hidden. */
+body.immersive #top-bar,
+body.immersive #ticker-bar {
+  display: none;
+}
+
+body.immersive #app {
+  top: 0;
+  bottom: 0;
+}
+
+body.immersive .panel-fab {
+  top: 12px;
+}
+
+.immersive-exit {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--border-glow);
+  border-radius: 50%;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  z-index: 1300;
+  box-shadow: var(--shadow-lg), 0 0 16px rgba(0, 240, 255, 0.12);
+}
+
+body.immersive .immersive-exit {
+  display: flex;
 }
 
 /* Sidebar Sections */

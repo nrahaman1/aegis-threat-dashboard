@@ -751,20 +751,36 @@ function exitAppFullscreen() {
     if (fn) fn.call(document);
 }
 
+// iPhone Safari has no Fullscreen API, so fall back to an in-app "immersive"
+// mode that hides the top bar + ticker to maximize the map on every device.
+function setImmersive(on) {
+    document.body.classList.toggle('immersive', on);
+    const btn = document.getElementById('fullscreen-btn');
+    if (btn) btn.setAttribute('aria-pressed', String(on));
+    setTimeout(() => state.map?.resize(), 120);
+}
+
 function setupFullscreen() {
     const btn = document.getElementById('fullscreen-btn');
     if (!btn) return;
 
-    // Hide the control if the browser has no Fullscreen API (e.g. iOS Safari)
-    const supported = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
-    if (!supported) { btn.style.display = 'none'; return; }
+    // Real fullscreen where the browser supports it; immersive fallback otherwise
+    const apiSupported = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
 
     btn.addEventListener('click', () => {
-        if (fullscreenElement()) exitAppFullscreen();
-        else requestAppFullscreen();
+        if (apiSupported) {
+            if (fullscreenElement()) exitAppFullscreen();
+            else requestAppFullscreen();
+        } else {
+            setImmersive(!document.body.classList.contains('immersive'));
+        }
     });
 
-    // Keep the icon/state in sync however fullscreen changes (button, Esc, F11)
+    // Dedicated exit control for immersive mode (the top bar is hidden then)
+    const exitBtn = document.getElementById('immersive-exit');
+    if (exitBtn) exitBtn.addEventListener('click', () => setImmersive(false));
+
+    // Keep the icon/state in sync however real fullscreen changes (button, Esc, F11)
     const onChange = () => {
         const active = !!fullscreenElement();
         document.body.classList.toggle('is-fullscreen', active);
